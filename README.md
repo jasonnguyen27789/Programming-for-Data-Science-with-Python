@@ -1,6 +1,10 @@
 ### Date created
 August.24 2024
 
+Author: hungnd (jsonnguyen)
+
+Remote repository: https://github.com/jasonnguyen27789/Programming-for-Data-Science-with-Python.git
+
 # Post your Work on GitHub
 
 ### Description

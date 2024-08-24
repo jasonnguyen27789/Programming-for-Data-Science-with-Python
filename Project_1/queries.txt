@@ -1,0 +1,190 @@
+Question Set #1
+
+    # Question 1
+    We want to understand more about the movies that families are watching. The following categories are considered family movies: Animation, Children, Classics, Comedy, Family and Music.
+    Create a query that lists each movie, the film category it is classified in, and the number of times it has been rented out.
+
+        Query:
+
+        SELECT f.title AS film_title,
+               c.name AS category_name,
+               COUNT(r.rental_id) AS rental_count
+        FROM film f
+        JOIN film_category fc
+          ON f.film_id = fc.film_id
+        JOIN category c
+          ON fc.category_id = c.category_id
+        JOIN inventory i
+          ON f.film_id = i.film_id
+        JOIN rental r
+          ON i.inventory_id = r.inventory_id
+        WHERE c.name IN ('Animation',
+                         'Children',
+                         'Classics',
+                         'Comedy',
+                         'Family',
+                         'Music')
+        GROUP BY f.title,
+                 c.name
+        ORDER BY c.name,
+                 f.title;
+
+    # Question 2
+    Now we need to know how the length of rental duration of these family-friendly movies compares to the duration that all movies are rented for. Can you provide a table with the movie titles and divide them into 4 levels (first_quarter, second_quarter, third_quarter, and final_quarter) based on the quartiles (25%, 50%, 75%) of the average rental duration(in the number of days) for movies across all categories? Make sure to also indicate the category that these family-friendly movies fall into.
+
+        Query:
+
+        SELECT f.title,
+               c.name,
+               f.rental_duration,
+               NTILE(4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+        FROM film_category fc
+        JOIN category c
+          ON c.category_id = fc.category_id
+        JOIN film f
+          ON f.film_id = fc.film_id
+        WHERE c.name IN ('Animation',
+                         'Children',
+                         'Classics',
+                         'Comedy',
+                         'Family',
+                         'Music')
+        ORDER BY f.rental_duration;
+
+    # Question 3
+    Finally, provide a table with the family-friendly film category, each of the quartiles, and the corresponding count of movies within each combination of film category for each corresponding rental duration category. The resulting table should have three columns:
+    - Category
+    - Rental length category
+    - Count
+
+        Query:
+
+        SELECT temptable.name,
+               temptable.standard_quartile,
+               COUNT(temptable.standard_quartile)
+        FROM
+            (SELECT f.title,
+                    c.name,
+                    f.rental_duration,
+                    NTILE(4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+             FROM film_category fc
+             JOIN category c
+               ON c.category_id = fc.category_id
+             JOIN film f
+               ON f.film_id = fc.film_id
+             WHERE c.name IN ('Animation',
+                              'Children',
+                              'Classics',
+                              'Comedy',
+                              'Family',
+                              'Music')) temptable
+        GROUP BY
+           temptable.name,
+           temptable.standard_quartile
+        ORDER BY
+           temptable.name,
+           temptable.standard_quartile;
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Question Set #2
+
+    # Question 1
+    We want to find out how the two stores compare in their count of rental orders during every month for all the years we have data for. Write a query that returns the store ID for the store, the year and month and the number of rental orders each store has fulfilled for that month. Your table should include a column for each of the following: year, month, store ID and count of rental orders fulfilled during that month.
+
+        Query:
+
+        SELECT DATE_PART('month', r1.rental_date) AS Rental_month,
+               DATE_PART('year', r1.rental_date) AS Rental_year,
+               s1.store_id AS Store,
+               COUNT(*) AS Count_rental
+        FROM store AS s1
+        JOIN staff AS s2
+          ON s1.store_id = s2.store_id
+        JOIN rental r1
+          ON s2.staff_id = r1.staff_id
+        GROUP BY
+           Rental_month,
+           Rental_year,
+           Store
+        ORDER BY Count_rental DESC;
+
+
+    # Question 2
+    We would like to know who were our top 10 paying customers, how many payments they made on a monthly basis during 2007, and what was the amount of the monthly payments. Can you write a query to capture the customer name, month and year of payment, and total payment amount for each month by these top 10 paying customers?
+
+        Query:
+
+        WITH Table1 AS (SELECT (first_name || ' ' || last_name) AS fullname,
+                               c.customer_id,
+                               p.amount,
+                               p.payment_date
+                        FROM customer AS c
+                        JOIN payment AS p
+                        ON c.customer_id = p.customer_id),
+             Table2 AS (SELECT Table1.customer_id
+                        FROM Table1
+                        GROUP BY Table1.customer_id
+                        ORDER BY SUM(Table1.amount) DESC
+                        LIMIT 10)
+        SELECT DATE_PART('month', Table1.payment_date) AS payment_month,
+               DATE_PART('year', Table1.payment_date) AS payment_year,
+               Table1.fullname,
+               COUNT (*) AS pay_countpermonth,
+               SUM(Table1.amount) AS pay_amount
+        FROM Table1
+        JOIN Table2
+          ON Table1.customer_id = Table2.customer_id
+        WHERE Table1.payment_date BETWEEN '20070101' AND '20080101'
+        GROUP BY
+           payment_month,
+           payment_year,
+           Table1.fullname
+        ORDER BY Table1.fullname;
+
+
+    # Question 3
+    Finally, for each of these top 10 paying customers, I would like to find out the difference across their monthly payments during 2007. Please go ahead and write a query to compare the payment amounts in each successive month. Repeat this for each of these 10 paying customers. Also, it will be tremendously helpful if you can identify the customer name who paid the most difference in terms of payments.
+
+        Query:
+
+        WITH Table1 AS (SELECT (first_name || ' ' || last_name) AS fullname,
+                               c.customer_id,
+                               p.amount,
+                               p.payment_date
+                        FROM customer AS c
+                        JOIN payment AS p
+                          ON c.customer_id = p.customer_id),
+             Table2 AS (SELECT Table1.customer_id
+                        FROM Table1
+                        GROUP BY Table1.customer_id
+                        ORDER BY SUM(Table1.amount) DESC
+                        LIMIT 10),
+             Table3 AS (SELECT DATE_PART('month', Table1.payment_date) AS payment_month,
+                               DATE_PART('year', Table1.payment_date) AS payment_year,
+                               Table1.fullname,
+                               COUNT (*) AS pay_countpermonth,
+                               SUM(Table1.amount) AS pay_amount,
+                               LEAD(SUM(Table1.amount)) OVER(PARTITION BY Table1.fullname ORDER BY DATE_PART('month', Table1.payment_date)) AS lead,
+                               LEAD(SUM(Table1.amount)) OVER(PARTITION BY Table1.fullname ORDER BY DATE_PART('month', Table1.payment_date)) - SUM(Table1.amount) AS lead_dif
+                    FROM Table1
+                    JOIN Table2
+                      ON Table1.customer_id = Table2.customer_id
+                    WHERE Table1.payment_date BETWEEN '20070101' AND '20080101'
+                    GROUP BY
+                       payment_month,
+                       payment_year,
+                       fullname
+                    ORDER BY
+                       payment_month,
+                       payment_year,
+                       fullname)
+        SELECT Table3.*,
+               CASE
+                   WHEN Table3.lead_dif = (SELECT MAX(Table3.lead_dif) FROM Table3 ORDER BY 1 DESC LIMIT 1) THEN 'The customer ' || Table3.fullname || ' paid the maximum difference'
+                   ELSE NULL
+               END AS maximum_difference
+        FROM Table3
+        ORDER BY payment_month;
